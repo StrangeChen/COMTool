@@ -29,6 +29,8 @@ from PyQt5.QtGui import QIcon,QFont,QTextCursor,QPixmap,QColor
 import qtawesome as qta # https://github.com/spyder-ide/qtawesome
 import os, threading, time, re
 from datetime import datetime
+import parameters
+log = parameters.log
 '''
 TODO:
 增加打开rpc log 按钮
@@ -55,7 +57,7 @@ class Plugin(Plugin_Base):
     id = "rpc_dbg"
     name = _("RPC LOG")
     #
-    receiveUpdateSignal = pyqtSignal(str, list, str) # head, content, encoding
+    receiveUpdateSignal = pyqtSignal(list, str) # content, encoding
     receiveProgressStop = False
     receivedData = []
     lock = threading.Lock()
@@ -118,15 +120,35 @@ class Plugin(Plugin_Base):
     def onWidgetMain(self, parent):
         self.mainWidget = QSplitter(Qt.Vertical)
         # widgets receive and send area
+        reveiveWidget = QWidget()
+        receiveAreaLayout = QVBoxLayout()
+        reveiveWidget.setLayout(receiveAreaLayout)
+        # receiveAreaLayout.setStretchFactor(5,1)
         self.receiveArea = QTextEdit()
         font = QFont('Menlo,Consolas,Bitstream Vera Sans Mono,Courier New,monospace, Microsoft YaHei', 10)
         self.receiveArea.setFont(font)
+        receiveAreaLayout.addWidget(self.receiveArea)
+        receiveReLayout = QHBoxLayout()
+        reLable = QLabel()
+        reLable.setText(_("Re Filter"))
+        receiveReLayout.addWidget(reLable)
+        self.reFilterLineEdit = QLineEdit()
+        receiveReLayout.addWidget(self.reFilterLineEdit)
+        self.reFilterBtn = QPushButton("")
+        utils_ui.setButtonIcon(self.reFilterBtn, "fa.filter")
+        self.reFilterBtn.setToolTip(_("update re Filter"))
+        receiveReLayout.addWidget(self.reFilterBtn)
+        receiveAreaLayout.addLayout(receiveReLayout)
+        self.reFilter = ""
+
         self.sendArea = QTextEdit()
         self.sendArea.setAcceptRichText(False)
         self.clearReceiveButtion = QPushButton("")
         utils_ui.setButtonIcon(self.clearReceiveButtion, "mdi6.broom")
+        self.clearReceiveButtion.setToolTip(_("Clear Receive Area"))
         self.sendButton = QPushButton("")
         utils_ui.setButtonIcon(self.sendButton, "fa.send")
+        self.sendButton.setToolTip(_("Send data"))
         self.sendHistory = ComboBox()
         sendWidget = QWidget()
         sendAreaWidgetsLayout = QHBoxLayout()
@@ -138,7 +160,7 @@ class Plugin(Plugin_Base):
         buttonLayout.addWidget(self.sendButton)
         sendAreaWidgetsLayout.addWidget(self.sendArea)
         sendAreaWidgetsLayout.addLayout(buttonLayout)
-        self.mainWidget.addWidget(self.receiveArea)
+        self.mainWidget.addWidget(reveiveWidget)
         self.mainWidget.addWidget(sendWidget)
         self.mainWidget.addWidget(self.sendHistory)
         self.mainWidget.setStretchFactor(0, 7)
@@ -149,6 +171,7 @@ class Plugin(Plugin_Base):
         self.clearReceiveButtion.clicked.connect(self.clearReceiveBuffer)
         self.receiveUpdateSignal.connect(self.updateReceivedDataDisplay)
         self.sendHistory.activated.connect(self.onSendHistoryIndexChanged)
+        self.reFilterBtn.clicked.connect(self.updateReFilter)
 
         return self.mainWidget
 
@@ -611,7 +634,8 @@ class Plugin(Plugin_Base):
                         head = "\n" + head
                     if head.strip() != '=>':
                         head = '{}: '.format(head.rstrip())
-                    self.receiveUpdateSignal.emit(head, [sendStr], self.configGlobal["encoding"])
+                    sendStr = head + sendStr
+                    self.receiveUpdateSignal.emit([sendStr], self.configGlobal["encoding"])
                     self.sendRecord.insert(0, head + sendStr)
                 self.send(data_bytes=data, callback = self.onSent)
                 self.justSent = True # flag for receive thread
@@ -642,6 +666,17 @@ class Plugin(Plugin_Base):
             self.hintSignal.emit("error", _("Error"), _("Send Error") + str(e))
             # print(e)
 
+    def updateReFilter(self):
+        self.reFilter = self.reFilterLineEdit.text()
+        log.i(f"updat e re filter: {self.reFilter}")
+        
+    def isReFilterMatch(self, sstr):
+        if not self.reFilter:
+            return True
+        if re.search(self.reFilter, sstr):
+            return True
+        return False    
+
     def onSendData(self, call=True, data=None):
         try:
             self.sendData(data)
@@ -649,7 +684,7 @@ class Plugin(Plugin_Base):
             print("[Error] onSendData: ", e)
             self.hintSignal.emit("error", _("Error"), _("get data error") + ": " + str(e))
 
-    def updateReceivedDataDisplay(self, head : str, datas : list, encoding):
+    def updateReceivedDataDisplay(self, datas : list, encoding):
         if datas:
             curScrollValue = self.receiveArea.verticalScrollBar().value()
             self.receiveArea.moveCursor(QTextCursor.End)
@@ -662,12 +697,7 @@ class Plugin(Plugin_Base):
                 self.defaultColor = format.foreground()
             if not self.defaultBg:
                 self.defaultBg = format.background()
-            if head:
-                format.setForeground(self.defaultColor)
-                cursor.setCharFormat(format)
-                format.setBackground(self.defaultBg)
-                cursor.setCharFormat(format)
-                cursor.insertText(head)
+
             for data in datas:
                 if type(data) == str:
                     self.receiveArea.insertPlainText(data)
@@ -853,15 +883,19 @@ class Plugin(Plugin_Base):
                     # if last msg endswith "\r", and this msg startswith "\n", don't show "\n", if you have different thought, add issue to github
                     if self.lastShowTail == "\r" and data[0] == "\n":
                         data = data[1:]
+                    if self.lastShowTail == "\r" or self.lastShowTail == "\n":
+                        new_line = True
+
                     colorData = data
                     buffer = b''
-                    if data and data[-1] == "\r":
+                    if data and (data[-1] == "\r" or data[-1] == "\n"):
                         self.lastShowTail = data[-1]
                     else:
                         self.lastShowTail = ""
+
                 # show as string, and need to render color, wait for \n or until timeout to ensure color flag in buffer
                 else:
-                    if time.time() - timeLastReceive >  self.config["receiveAutoLindefeedTime"] / 1000 or b'\n' in buffer:
+                    if b'\n' in buffer:
                         data, colorData, remain = self.getColoredText(buffer, self.configGlobal["encoding"])
                         buffer = remain
                 # add time receive head
@@ -871,19 +905,35 @@ class Plugin(Plugin_Base):
                     # '123'  '[2021-12-20 11:02:08.02.754]: 123' '=> 12' '<= 123'
                     # '=> [2021-12-20 11:02:34.02.291]: 123' '<= [2021-12-20 11:02:40.02.783]: 123'
                     # '<= [2021-12-20 11:03:25.03.320] [HEX]: 31 32 33 ' '=> [2021-12-20 11:03:27.03.319] [HEX]: 31 32 33'
-                    if new_line:
+                    # if self.config["recordSend"]:
+                    #     head += "<= "
+                    if self.config["showTimestamp"]:
                         timeNow = '[{}] '.format(utils.datetime_format_ms(datetime.now()))
-                        if self.config["recordSend"]:
-                            head += "<= "
-                        if self.config["showTimestamp"]:
-                            head += timeNow
-                            head = '{} '.format(head.rstrip())
-                        if hexstr:
-                            head += "[HEX] "
-                        if (self.config["recordSend"] or self.config["showTimestamp"]) and not head.endswith("<= "):
-                            head = head[:-1] + ": "
-                        new_line = False
-                    self.receiveUpdateSignal.emit(head, [colorData], self.configGlobal["encoding"])
+                        head += timeNow
+                        head = '{} '.format(head.rstrip())
+                    if hexstr:
+                        head += "[HEX] "
+                    if (self.config["showTimestamp"]) and not head.endswith("<= "):
+                        head = head[:-1] + ": "
+
+                    if type(colorData) == str:
+                        colorData = self.processStrLineByline(head, colorData, new_line)
+                        if new_line:
+                            new_line = False
+                        
+                        # _head = head if '\n' in head else ('\n' + head)
+                        # data_list = re.split('\r\n|\n|\r', colorData)
+                        # if new_line:
+                        #     data_list[0] = _head + data_list[0]
+                        #     new_line = False
+                        # list_size = len(data_list)
+                        # print(f"list size {list_size}")
+                        # colorData = data_list[0]
+                        # if list_size > 1:
+                        #     for i in range(1, list_size):
+                        #         if data_list[i]:
+                        #             colorData += _head + data_list[i]
+                    self.receiveUpdateSignal.emit([colorData], self.configGlobal["encoding"])
                     logData = head + data
             if len(new) > 0:
                 timeLastReceive = time.time()
@@ -892,4 +942,22 @@ class Plugin(Plugin_Base):
                 self.onLog(self.sendRecord.pop())
             if logData:
                 self.onLog(logData)
+                
+    def processStrLineByline(self, head, data, new_line):
+        _head = head if '\n' in head else ('\n' + head)
+        if data[-1] == '\n':
+            data = data[:-1]
+        if data[-1] == '\r':
+            data = data[:-1]
+        data_list = re.split('\r\n|\n|\r', data)
+        list_size = len(data_list)
+
+        new_str = ""
+        if self.isReFilterMatch(data_list[0]):
+            new_str = _head + data_list[0] if new_line else data_list[0]
+        if list_size > 1:
+            for i in range(1, list_size):
+                if self.isReFilterMatch(data_list[i]):
+                    new_str += _head + data_list[i]
+        return new_str
 

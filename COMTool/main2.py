@@ -301,6 +301,7 @@ class MainWindow(CustomTitleBarWindowMixin, QMainWindow):
         for encoding in self.supportedEncoding:
             self.encodingCombobox.addItem(encoding)
         self.settingsButton.setProperty("class", "menuItem1")
+        self.settingsButton.setToolTip("Setting")
         self.skinButton.setProperty("class", "menuItem2")
         self.aboutButton.setProperty("class", "menuItem3")
         self.functionalButton.setProperty("class", "menuItem4")
@@ -308,6 +309,7 @@ class MainWindow(CustomTitleBarWindowMixin, QMainWindow):
         self.skinButton.setObjectName("menuItem")
         self.aboutButton.setObjectName("menuItem")
         self.functionalButton.setObjectName("menuItem")
+        self.functionalButton.setToolTip("Function")
         # plugins slector
         self.pluginsSelector = ButtonCombbox(icon="fa.plus", btnClass="smallBtn2")
         self.pluginsSelector.addItem(self.loadPluginStr)
@@ -439,6 +441,7 @@ class MainWindow(CustomTitleBarWindowMixin, QMainWindow):
             return
         self.tabWidget.removeTab(idx)
         item = self.items.pop(idx)
+        item.onDel()
         for _item in self.config["items"]:
             if _item["name"] == item.name:
                 self.config["items"].remove(_item)
