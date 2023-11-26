@@ -899,6 +899,10 @@ msgstr ""
 msgid "Send settings"
 msgstr ""
 
+#: plugins/rpc_dbg.py:133
+msgid "Re Filter"
+msgstr ""
+
 #: plugins/protocol.py:466
 msgid "Run decode error"
 msgstr ""

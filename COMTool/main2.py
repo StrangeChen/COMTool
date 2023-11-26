@@ -327,6 +327,8 @@ class MainWindow(CustomTitleBarWindowMixin, QMainWindow):
         self.settingsButton.setObjectName("menuItem1")
         self.aboutButton.setObjectName("menuItem3")
         self.functionalButton.setObjectName("menuItem4")
+        self.settingsButton.setToolTip("Setting")
+        self.functionalButton.setToolTip("Function")
         # plugins slector
         self.pluginsSelector = ButtonCombbox(icon="fa.plus", btnClass="smallBtn2")
         self.pluginsSelector.addItem(self.loadPluginStr)
@@ -463,6 +465,7 @@ class MainWindow(CustomTitleBarWindowMixin, QMainWindow):
                 item = _item
                 break
         self.tabWidget.removeTab(idx)
+        item.onDel()
         for _item in self.config["items"]:
             if _item["name"] == item.name:
                 self.config["items"].remove(_item)

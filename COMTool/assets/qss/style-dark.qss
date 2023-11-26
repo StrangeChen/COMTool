@@ -4,22 +4,22 @@
 }
 
 MainWindow {
-    background-color:#212121;
+    background-color:#1e1f22;
     color:#bcbcbd;
     min-width:100px;
 }
 QWidget {
-    background-color:#212121;
+    background-color:#1e1f22;
 }
 QMessageBox {
-    background-color:#212121;
+    background-color:#1e1f22;
 }
 QWidget {
     color:#bcbcbd;
-    font-family: "Microsoft YaHei",Tahoma,Optima,"Trebuchet MS";
+    font-family: "Bitstream Vera Sans Mono";
 }
 .TitleBar {
-    background-color: #212121;
+    background-color: #1e1f22;
     color: white;
 }
 .TitleBar QPushButton {
@@ -138,7 +138,7 @@ QComboBox {
     border: 1px solid #272727;
     border-radius: 5px;
     padding: 1px 1px 1px 3px;
-    min-height:25px;
+    min-height:20px;
     min-width:60px;
 }
 
@@ -195,7 +195,7 @@ QComboBox QAbstractItemView {
     min-height:10em; */
 }
 QComboBox QAbstractItemView::item{
-    min-height:3em;
+    min-height:2em;
 }
 
 
@@ -216,9 +216,9 @@ QGroupBox::title {
 
 QPushButton {
     font-family:Tahoma,Optima,"Trebuchet MS";
-    border: 2px solid #0865b1;
+    border: 1px solid #000000;
     border-radius: 5px;
-    background-color: #0865b1;
+    background-color: #212121;
     min-width: 80px;
     height:30px;
     min-height:25px;
@@ -292,7 +292,7 @@ QPushButton:default {
     height: 20px;
 }
 
-QTextEdit, QPlainTextEdit, QListView {
+QTextEdit, QPlainTextEdit, QListView{
     background-color: #3a3a3a;
     border: 2px solid #3a3a3a;
     border-radius: 5px;
@@ -366,8 +366,9 @@ QScrollBar:horizontal {
     height: 10px;
 }
 QScrollBar::handle {
-    background: #212121;
+    background: #0f88eb;
     border-radius: 5px;
+    min-height: 20px
 }
 QScrollBar::add-line {
     border: none;
@@ -384,13 +385,13 @@ QScrollBar::add-page, QScrollBar::sub-page {
     background-color: #3a3a3a;
 }
 .scrollbar2, .scrollbar2 QScrollBar  {
-    background: #212121;
+    background: #1e1f22;
 }
 .scrollbar2::handle, .scrollbar2 QScrollBar::handle {
     background: #3a3a3a;
 }
 .scrollbar2::add-page, .scrollbar2::sub-page, .scrollbar2 QScrollBar::add-page, .scrollbar2 QScrollBar::sub-page {
-    background-color: #212121;
+    background-color: #1e1f22;
 }
 QScrollArea {
     border: none;
@@ -446,7 +447,7 @@ QTabBar::tab {
     border-top-left-radius: 4px;
     border-top-right-radius: 4px;
     min-width: 80px;
-    min-height: 34px;
+    min-height: 30px;
     padding-left: 2ex;
     padding-right: 2ex;
 }

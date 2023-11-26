@@ -982,3 +982,6 @@ msgstr "我的插件2"
 #~ msgid "This plugin no help info"
 #~ msgstr "此插件无帮助信息"
 
+#: plugins/rpc_dbg.py:133
+msgid "Re Filter"
+msgstr "正则过滤"
