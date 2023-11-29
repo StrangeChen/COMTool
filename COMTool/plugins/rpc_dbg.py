@@ -55,7 +55,7 @@ class Plugin(Plugin_Base):
     connParent = "main"
     connChilds = []
     id = "rpc_dbg"
-    name = _("RPC LOG")
+    name = _("Send Receive")
     #
     receiveUpdateSignal = pyqtSignal(list, str) # content, encoding
     receiveProgressStop = False
@@ -125,7 +125,7 @@ class Plugin(Plugin_Base):
         reveiveWidget.setLayout(receiveAreaLayout)
         # receiveAreaLayout.setStretchFactor(5,1)
         self.receiveArea = QTextEdit()
-        font = QFont('Menlo,Consolas,Bitstream Vera Sans Mono,Courier New,monospace, Microsoft YaHei', 10)
+        font = QFont('Menlo,Consolas,Microsoft YaHei', 12)
         self.receiveArea.setFont(font)
         receiveAreaLayout.addWidget(self.receiveArea)
         receiveReLayout = QHBoxLayout()
@@ -634,7 +634,7 @@ class Plugin(Plugin_Base):
                         head = "\n" + head
                     if head.strip() != '=>':
                         head = '{}: '.format(head.rstrip())
-                    sendStr = head + sendStr
+                    sendStr = head + sendStr + "\r\n" if self.config["useCRLF"] else "\n"
                     self.receiveUpdateSignal.emit([sendStr], self.configGlobal["encoding"])
                     self.sendRecord.insert(0, head + sendStr)
                 self.send(data_bytes=data, callback = self.onSent)
@@ -669,13 +669,13 @@ class Plugin(Plugin_Base):
     def updateReFilter(self):
         self.reFilter = self.reFilterLineEdit.text()
         log.i(f"updat e re filter: {self.reFilter}")
-        
+
     def isReFilterMatch(self, sstr):
         if not self.reFilter:
             return True
         if re.search(self.reFilter, sstr):
             return True
-        return False    
+        return False
 
     def onSendData(self, call=True, data=None):
         try:
@@ -691,7 +691,7 @@ class Plugin(Plugin_Base):
             endScrollValue = self.receiveArea.verticalScrollBar().value()
             cursor = self.receiveArea.textCursor()
             format = cursor.charFormat()
-            font = QFont('Menlo,Consolas,Bitstream Vera Sans Mono,Courier New,monospace, Microsoft YaHei', 10)
+            font = QFont('Consolas, Microsoft YaHei', 12)
             format.setFont(font)
             if not self.defaultColor:
                 self.defaultColor = format.foreground()
@@ -722,6 +722,7 @@ class Plugin(Plugin_Base):
                 self.receiveArea.verticalScrollBar().setValue(curScrollValue)
             else:
                 self.receiveArea.moveCursor(QTextCursor.End)
+            # print(f"show len {len(data)} {time.time()}")
 
     def sendHistoryFindDelete(self,str):
         self.sendHistory.removeItem(self.sendHistory.findText(str))
@@ -838,111 +839,133 @@ class Plugin(Plugin_Base):
     def onReceived(self, data : bytes):
         self.receivedData.append(data)
         self.statusBar.addRx(len(data))
+        print(f"rx len {len(data)} {time.time()}")
         if self.lock.locked():
             self.lock.release()
 
     def receiveDataProcess(self):
         self.receiveProgressStop = False
+        self.needNewLine = False
         timeLastReceive = 0
         new_line = True
         logData = None
-        buffer = b''
-        remain = b''
+        self.bufferWaitProcess = b''
+        ret = False
         while(not self.receiveProgressStop):
             logData = None
             head = ""
-            self.lock.acquire()
-            new = b"".join(self.receivedData)
-            # 解码
-            buffer += new
-            self.receivedData = []
-            # timeout, add new line
-            # self.justSent means just sent data, need show head
-            if self.justSent:
-                if self.config["showTimestamp"]:
-                    if self.config["useCRLF"]:
-                        head += "\r\n"
-                    else:
-                        head += "\n"
-                    new_line = True
-                    self.justSent = False
-            data = ""
-            # have data in buffer
-            if len(buffer) > 0:
-                hexstr = False
-                # show as hex, just show
+            if self.lock.acquire(timeout=0.1):
+                new = b"".join(self.receivedData)
+                # 解码
+                self.bufferWaitProcess += new
+                self.receivedData = []
+                data = ""
                 if not self.config["receiveAscii"]:
-                    data = utils.bytes_to_hex_str(buffer)
-                    colorData = data
-                    buffer = b''
-                    hexstr = True
-                # show as string, and don't need to render color
-                elif not self.config["color"]:
-                    data = buffer.decode(encoding=self.configGlobal["encoding"], errors="ignore")
-                    # self.lastShowTail for separated \r\n, prevent show two linefeed
-                    # if last msg endswith "\r", and this msg startswith "\n", don't show "\n", if you have different thought, add issue to github
-                    if self.lastShowTail == "\r" and data[0] == "\n":
-                        data = data[1:]
-                    if self.lastShowTail == "\r" or self.lastShowTail == "\n":
-                        new_line = True
-
-                    colorData = data
-                    buffer = b''
-                    if data and (data[-1] == "\r" or data[-1] == "\n"):
-                        self.lastShowTail = data[-1]
-                    else:
-                        self.lastShowTail = ""
-
-                # show as string, and need to render color, wait for \n or until timeout to ensure color flag in buffer
+                    data = self.bufferUnpackHex()
                 else:
-                    if b'\n' in buffer:
-                        data, colorData, remain = self.getColoredText(buffer, self.configGlobal["encoding"])
-                        buffer = remain
-                # add time receive head
-                # get data from buffer, now render
+                    data = self.bufferUnpackAscii()
                 if data:
-                    # add time header, head format(send receive '123' for example):
-                    # '123'  '[2021-12-20 11:02:08.02.754]: 123' '=> 12' '<= 123'
-                    # '=> [2021-12-20 11:02:34.02.291]: 123' '<= [2021-12-20 11:02:40.02.783]: 123'
-                    # '<= [2021-12-20 11:03:25.03.320] [HEX]: 31 32 33 ' '=> [2021-12-20 11:03:27.03.319] [HEX]: 31 32 33'
-                    # if self.config["recordSend"]:
-                    #     head += "<= "
-                    if self.config["showTimestamp"]:
-                        timeNow = '[{}] '.format(utils.datetime_format_ms(datetime.now()))
-                        head += timeNow
-                        head = '{} '.format(head.rstrip())
-                    if hexstr:
-                        head += "[HEX] "
-                    if (self.config["showTimestamp"]) and not head.endswith("<= "):
-                        head = head[:-1] + ": "
-
-                    if type(colorData) == str:
-                        colorData = self.processStrLineByline(head, colorData, new_line)
-                        if new_line:
-                            new_line = False
-                        
-                        # _head = head if '\n' in head else ('\n' + head)
-                        # data_list = re.split('\r\n|\n|\r', colorData)
-                        # if new_line:
-                        #     data_list[0] = _head + data_list[0]
-                        #     new_line = False
-                        # list_size = len(data_list)
-                        # print(f"list size {list_size}")
-                        # colorData = data_list[0]
-                        # if list_size > 1:
-                        #     for i in range(1, list_size):
-                        #         if data_list[i]:
-                        #             colorData += _head + data_list[i]
-                    self.receiveUpdateSignal.emit([colorData], self.configGlobal["encoding"])
+                    self.receiveUpdateSignal.emit([data], self.configGlobal["encoding"])
                     logData = head + data
-            if len(new) > 0:
-                timeLastReceive = time.time()
+                if len(new) > 0:
+                    timeLastReceive = time.time()
 
-            while len(self.sendRecord) > 0:
-                self.onLog(self.sendRecord.pop())
-            if logData:
-                self.onLog(logData)
-                
+                while len(self.sendRecord) > 0:
+                    self.onLog(self.sendRecord.pop())
+                if logData:
+                    self.onLog(logData)
+            else:
+                # print(f"time out !!! {time.time()}")
+                if self.bufferWaitProcess:
+                    if not self.config["receiveAscii"]:
+                        data = self.bufferUnpackHex(True)
+                    else:
+                        data = self.bufferUnpackAscii(True)
+                    print(f"data {len(self.bufferWaitProcess)} {len(data)}")
+                    self.receiveUpdateSignal.emit([data], self.configGlobal["encoding"])
+
+    def bufferUnpackAscii(self, isFlush = False):
+        if self.bufferWaitProcess:
+            hexstr = False
+            data = ""
+            buffer = b''
+            new_line = False
+            if isFlush:
+                buffer = self.bufferWaitProcess
+                self.bufferWaitProcess = b''
+                new_line = False
+            else:
+                idx = self.bufferWaitProcess.rfind(b'\n')
+                if idx > 0:
+                    buffer = self.bufferWaitProcess[:idx]
+                    self.needNewLine = True
+                    self.bufferWaitProcess = self.bufferWaitProcess[idx+1:]
+            if buffer:
+                data = buffer.decode(encoding=self.configGlobal["encoding"], errors="ignore")
+            if data:
+                # add time header, head format(send receive '123' for example):
+                # '123'  '[2021-12-20 11:02:08.02.754]: 123' '=> 12' '<= 123'
+                # '=> [2021-12-20 11:02:34.02.291]: 123' '<= [2021-12-20 11:02:40.02.783]: 123'
+                # '<= [2021-12-20 11:03:25.03.320] [HEX]: 31 32 33 ' '=> [2021-12-20 11:03:27.03.319] [HEX]: 31 32 33'
+                head = ""
+                if self.config["showTimestamp"]:
+                    timeNow = '[{}] '.format(utils.datetime_format_ms(datetime.now()))
+                    head += timeNow
+                    head = '{} '.format(head.rstrip())
+                if hexstr:
+                    head += "[HEX] "
+                if (self.config["showTimestamp"]) and not head.endswith("<= "):
+                    head = head[:-1] + ": "
+                print(f"needNewLine {self.needNewLine}")
+                if self.needNewLine:
+                    data = self.processStrLineByline(head, data, True)
+                else:
+                    data = self.processStrLineByline("", data, False)
+                if isFlush:
+                    self.needNewLine = False
+                return data
+
+    def bufferUnpackHex(self, isFlush = False):
+        if self.bufferWaitProcess:
+            hexstr = False
+            data = ""
+            # show as hex, just show
+            if not self.config["receiveAscii"]:
+                data = utils.bytes_to_hex_str(self.bufferWaitProcess)
+                self.bufferWaitProcess = b''
+                hexstr = True
+            else:
+                buffer = b''
+                if isFlush:
+                    buffer = self.bufferWaitProcess
+                    self.bufferWaitProcess = b''
+                else:
+                    idx = self.bufferWaitProcess.rfind(b'\n')
+                    if idx > 0:
+                        buffer = self.bufferWaitProcess[:idx]
+                        self.bufferWaitProcess = self.bufferWaitProcess[idx:]
+                if buffer:
+                    data = buffer.decode(encoding=self.configGlobal["encoding"], errors="ignore")
+                    print(f"bufferUnpack data {len(self.bufferWaitProcess)}")
+            if data:
+                # add time header, head format(send receive '123' for example):
+                # '123'  '[2021-12-20 11:02:08.02.754]: 123' '=> 12' '<= 123'
+                # '=> [2021-12-20 11:02:34.02.291]: 123' '<= [2021-12-20 11:02:40.02.783]: 123'
+                # '<= [2021-12-20 11:03:25.03.320] [HEX]: 31 32 33 ' '=> [2021-12-20 11:03:27.03.319] [HEX]: 31 32 33'
+                # if self.config["recordSend"]:
+                #     head += "<= "
+                head = ""
+                if self.config["showTimestamp"]:
+                    timeNow = '[{}] '.format(utils.datetime_format_ms(datetime.now()))
+                    head += timeNow
+                    head = '{} '.format(head.rstrip())
+                if hexstr:
+                    head += "[HEX] "
+                if (self.config["showTimestamp"]) and not head.endswith("<= "):
+                    head = head[:-1] + ": "
+                data = self.processStrLineByline(head, data, True)
+                return data
+
     def processStrLineByline(self, head, data, new_line):
         _head = head if '\n' in head else ('\n' + head)
         if data[-1] == '\n':
@@ -951,7 +974,7 @@ class Plugin(Plugin_Base):
             data = data[:-1]
         data_list = re.split('\r\n|\n|\r', data)
         list_size = len(data_list)
-
+        print(data_list)
         new_str = ""
         if self.isReFilterMatch(data_list[0]):
             new_str = _head + data_list[0] if new_line else data_list[0]
