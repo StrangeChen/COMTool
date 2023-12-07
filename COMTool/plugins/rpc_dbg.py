@@ -36,7 +36,11 @@ TODO:
 增加打开rpc log 按钮
 增加按钮悬浮框
 默认边栏开启
+
 '''
+# font = QFont('Menlo,Consolas,Bitstream Vera Sans Mono,Courier New,monospace', 12)
+font = QFont('Consolas, Microsoft YaHei', 11)
+
 class Plugin(Plugin_Base):
     '''
         call sequence:
@@ -125,7 +129,6 @@ class Plugin(Plugin_Base):
         reveiveWidget.setLayout(receiveAreaLayout)
         # receiveAreaLayout.setStretchFactor(5,1)
         self.receiveArea = QTextEdit()
-        font = QFont('Menlo,Consolas,Microsoft YaHei', 12)
         self.receiveArea.setFont(font)
         receiveAreaLayout.addWidget(self.receiveArea)
         receiveReLayout = QHBoxLayout()
@@ -135,6 +138,7 @@ class Plugin(Plugin_Base):
         self.reFilterLineEdit = QLineEdit()
         receiveReLayout.addWidget(self.reFilterLineEdit)
         self.reFilterBtn = QPushButton("")
+        # self.reFilterBtn.setFixedSize(self.reFilterBtn.height(),self.reFilterBtn.height())
         utils_ui.setButtonIcon(self.reFilterBtn, "fa.filter")
         self.reFilterBtn.setToolTip(_("update re Filter"))
         receiveReLayout.addWidget(self.reFilterBtn)
@@ -662,13 +666,12 @@ class Plugin(Plugin_Base):
         except Exception as e:
             import traceback
             traceback.print_exc()
-            print("[Error] sendData: ", e)
+            log.e("[Error] sendData: ", e)
             self.hintSignal.emit("error", _("Error"), _("Send Error") + str(e))
-            # print(e)
 
     def updateReFilter(self):
         self.reFilter = self.reFilterLineEdit.text()
-        log.i(f"updat e re filter: {self.reFilter}")
+        log.i(f"updat re filter: {self.reFilter}")
 
     def isReFilterMatch(self, sstr):
         if not self.reFilter:
@@ -681,7 +684,7 @@ class Plugin(Plugin_Base):
         try:
             self.sendData(data)
         except Exception as e:
-            print("[Error] onSendData: ", e)
+            log.i("[Error] onSendData: ", e)
             self.hintSignal.emit("error", _("Error"), _("get data error") + ": " + str(e))
 
     def updateReceivedDataDisplay(self, datas : list, encoding):
@@ -691,7 +694,7 @@ class Plugin(Plugin_Base):
             endScrollValue = self.receiveArea.verticalScrollBar().value()
             cursor = self.receiveArea.textCursor()
             format = cursor.charFormat()
-            font = QFont('Consolas, Microsoft YaHei', 12)
+
             format.setFont(font)
             if not self.defaultColor:
                 self.defaultColor = format.foreground()
@@ -722,7 +725,6 @@ class Plugin(Plugin_Base):
                 self.receiveArea.verticalScrollBar().setValue(curScrollValue)
             else:
                 self.receiveArea.moveCursor(QTextCursor.End)
-            # print(f"show len {len(data)} {time.time()}")
 
     def sendHistoryFindDelete(self,str):
         self.sendHistory.removeItem(self.sendHistory.findText(str))
@@ -839,17 +841,16 @@ class Plugin(Plugin_Base):
     def onReceived(self, data : bytes):
         self.receivedData.append(data)
         self.statusBar.addRx(len(data))
-        print(f"rx len {len(data)} {time.time()}")
         if self.lock.locked():
             self.lock.release()
 
     def receiveDataProcess(self):
         self.receiveProgressStop = False
-        self.needNewLine = False
         timeLastReceive = 0
         new_line = True
         logData = None
         self.bufferWaitProcess = b''
+        self.firstLineNeedHeader = True
         ret = False
         while(not self.receiveProgressStop):
             logData = None
@@ -859,6 +860,7 @@ class Plugin(Plugin_Base):
                 # 解码
                 self.bufferWaitProcess += new
                 self.receivedData = []
+                
                 data = ""
                 if not self.config["receiveAscii"]:
                     data = self.bufferUnpackHex()
@@ -875,30 +877,24 @@ class Plugin(Plugin_Base):
                 if logData:
                     self.onLog(logData)
             else:
-                # print(f"time out !!! {time.time()}")
                 if self.bufferWaitProcess:
                     if not self.config["receiveAscii"]:
                         data = self.bufferUnpackHex(True)
                     else:
                         data = self.bufferUnpackAscii(True)
-                    print(f"data {len(self.bufferWaitProcess)} {len(data)}")
                     self.receiveUpdateSignal.emit([data], self.configGlobal["encoding"])
 
     def bufferUnpackAscii(self, isFlush = False):
         if self.bufferWaitProcess:
-            hexstr = False
             data = ""
             buffer = b''
-            new_line = False
             if isFlush:
                 buffer = self.bufferWaitProcess
                 self.bufferWaitProcess = b''
-                new_line = False
             else:
                 idx = self.bufferWaitProcess.rfind(b'\n')
-                if idx > 0:
-                    buffer = self.bufferWaitProcess[:idx]
-                    self.needNewLine = True
+                if idx >= 0:
+                    buffer = self.bufferWaitProcess[:idx+1]
                     self.bufferWaitProcess = self.bufferWaitProcess[idx+1:]
             if buffer:
                 data = buffer.decode(encoding=self.configGlobal["encoding"], errors="ignore")
@@ -912,17 +908,17 @@ class Plugin(Plugin_Base):
                     timeNow = '[{}] '.format(utils.datetime_format_ms(datetime.now()))
                     head += timeNow
                     head = '{} '.format(head.rstrip())
-                if hexstr:
-                    head += "[HEX] "
+                    if data[-1] != "\n":
+                        data += "\n"
                 if (self.config["showTimestamp"]) and not head.endswith("<= "):
                     head = head[:-1] + ": "
-                print(f"needNewLine {self.needNewLine}")
-                if self.needNewLine:
-                    data = self.processStrLineByline(head, data, True)
+                if head:
+                    self.firstLineNeedHeader = True
+                data = self.processStrLineByline(head, data, self.firstLineNeedHeader)
+                if data and data[-1] == "\n":
+                    self.firstLineNeedHeader = True
                 else:
-                    data = self.processStrLineByline("", data, False)
-                if isFlush:
-                    self.needNewLine = False
+                    self.firstLineNeedHeader = False
                 return data
 
     def bufferUnpackHex(self, isFlush = False):
@@ -946,7 +942,6 @@ class Plugin(Plugin_Base):
                         self.bufferWaitProcess = self.bufferWaitProcess[idx:]
                 if buffer:
                     data = buffer.decode(encoding=self.configGlobal["encoding"], errors="ignore")
-                    print(f"bufferUnpack data {len(self.bufferWaitProcess)}")
             if data:
                 # add time header, head format(send receive '123' for example):
                 # '123'  '[2021-12-20 11:02:08.02.754]: 123' '=> 12' '<= 123'
@@ -967,20 +962,33 @@ class Plugin(Plugin_Base):
                 return data
 
     def processStrLineByline(self, head, data, new_line):
-        _head = head if '\n' in head else ('\n' + head)
+        # _head = head if '\n' in head else ('\n' + head)
+        _head = head
+        lastIsEnter = False
+        # 去除最后换行符避免空行
         if data[-1] == '\n':
             data = data[:-1]
+            lastIsEnter = True
         if data[-1] == '\r':
             data = data[:-1]
         data_list = re.split('\r\n|\n|\r', data)
         list_size = len(data_list)
-        print(data_list)
         new_str = ""
+        # 对第一行特殊处理
         if self.isReFilterMatch(data_list[0]):
-            new_str = _head + data_list[0] if new_line else data_list[0]
+            if new_line:
+                new_str = _head + data_list[0]
+            else:
+                new_str = data_list[0]
+            if list_size != 1 or lastIsEnter: new_str += '\n'
         if list_size > 1:
-            for i in range(1, list_size):
+            for i in range(1, list_size - 1):
                 if self.isReFilterMatch(data_list[i]):
-                    new_str += _head + data_list[i]
+                    new_str += _head + data_list[i] + "\n"
+            if self.isReFilterMatch(data_list[-1]):
+                if lastIsEnter:
+                    new_str += _head + data_list[-1] + "\n"
+                else:
+                    new_str += _head + data_list[-1]
         return new_str
 

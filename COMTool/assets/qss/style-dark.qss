@@ -16,7 +16,6 @@ QMessageBox {
 }
 QWidget {
     color:#bcbcbd;
-    font-family: "Bitstream Vera Sans Mono";
 }
 .TitleBar {
     background-color: #1e1f22;
@@ -366,7 +365,7 @@ QScrollBar:horizontal {
     height: 10px;
 }
 QScrollBar::handle {
-    background: #0f88eb;
+    background: #212121;
     border-radius: 5px;
     min-height: 20px
 }

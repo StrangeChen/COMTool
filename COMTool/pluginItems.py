@@ -2,7 +2,8 @@ import imp
 from PyQt5.QtCore import pyqtSignal, Qt, QRect, QMargins
 from PyQt5.QtWidgets import (QApplication, QWidget,QPushButton,QMessageBox,QDesktopWidget,QMainWindow,
                              QVBoxLayout,QHBoxLayout,QGridLayout,QTextEdit,QLabel,QRadioButton,QCheckBox,
-                             QLineEdit,QGroupBox,QSplitter,QFileDialog, QScrollArea, QTabWidget, QMenu, QSplashScreen)
+                             QLineEdit,QGroupBox,QSplitter,QFileDialog, QScrollArea, QTabWidget, QMenu, QSplashScreen,
+                             QSizePolicy)
 from PyQt5.QtGui import QIcon,QFont,QTextCursor,QPixmap,QColor, QCloseEvent
 import threading
 import time
@@ -100,6 +101,7 @@ class PluginItem:
         self.settingWidget.setProperty("class","settingWidget")
         settingLayout = QVBoxLayout()
         self.settingWidget.setLayout(settingLayout)
+        self.settingWidget.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         #    get connection settings widgets
         if isAddConn:
             connSettingsGroupBox = QGroupBox(_("Connection"))
@@ -141,7 +143,7 @@ class PluginItem:
         widget.addWidget(self.settingWidget)
         widget.addWidget(self.mainWidget)
         widget.addWidget(self.functionalWidget)
-        widget.setStretchFactor(0, 1)
+        widget.setStretchFactor(0, 0)
         widget.setStretchFactor(1, 5)
         widget.setStretchFactor(2, 1)
         # self.functionalWidget.hide()

@@ -151,6 +151,7 @@ class MainWindow(CustomTitleBarWindowMixin, QMainWindow):
         else:  # load builtin plugins
             for id, pluginClass in builtinPlugins.items(): 
                 self.addItem(pluginClass)
+        self.hideFunctional()
 
     def addItem(self, pluginClass, nameSaved = None, setCurrent = False, connsConfigs=None, pluginConfig=None):
         '''
@@ -473,6 +474,9 @@ class MainWindow(CustomTitleBarWindowMixin, QMainWindow):
         self.items.remove(item)
 
     def onTabDoubleClicked(self, idx):
+        if self.tabWidget.count() == 1:
+            log.i("only one tab, double click ignore")
+            return
         item = self.getCurrentItem()
         self.tabWidget.removeTab(idx)
         parent = item.widget.parent()
