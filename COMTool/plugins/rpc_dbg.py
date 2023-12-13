@@ -923,25 +923,9 @@ class Plugin(Plugin_Base):
 
     def bufferUnpackHex(self, isFlush = False):
         if self.bufferWaitProcess:
-            hexstr = False
             data = ""
-            # show as hex, just show
-            if not self.config["receiveAscii"]:
-                data = utils.bytes_to_hex_str(self.bufferWaitProcess)
-                self.bufferWaitProcess = b''
-                hexstr = True
-            else:
-                buffer = b''
-                if isFlush:
-                    buffer = self.bufferWaitProcess
-                    self.bufferWaitProcess = b''
-                else:
-                    idx = self.bufferWaitProcess.rfind(b'\n')
-                    if idx > 0:
-                        buffer = self.bufferWaitProcess[:idx]
-                        self.bufferWaitProcess = self.bufferWaitProcess[idx:]
-                if buffer:
-                    data = buffer.decode(encoding=self.configGlobal["encoding"], errors="ignore")
+            data = utils.bytes_to_hex_str(self.bufferWaitProcess)
+            self.bufferWaitProcess = b''
             if data:
                 # add time header, head format(send receive '123' for example):
                 # '123'  '[2021-12-20 11:02:08.02.754]: 123' '=> 12' '<= 123'
@@ -954,12 +938,10 @@ class Plugin(Plugin_Base):
                     timeNow = '[{}] '.format(utils.datetime_format_ms(datetime.now()))
                     head += timeNow
                     head = '{} '.format(head.rstrip())
-                if hexstr:
-                    head += "[HEX] "
+                head += "[HEX] "
                 if (self.config["showTimestamp"]) and not head.endswith("<= "):
                     head = head[:-1] + ": "
-                data = self.processStrLineByline(head, data, True)
-                return data
+                return head + data
 
     def processStrLineByline(self, head, data, new_line):
         # _head = head if '\n' in head else ('\n' + head)

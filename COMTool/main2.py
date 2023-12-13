@@ -53,6 +53,9 @@ import threading
 import time
 from datetime import datetime
 import binascii,re
+
+from qfluentwidgets import (FluentTranslator, PushButton)
+
 if sys.platform == "win32":
     import ctypes
 
